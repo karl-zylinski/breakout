@@ -45,7 +45,9 @@ ball_attached: bool
 blocks: [dynamic]Block
 
 main :: proc() {
+	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
+	rl.SetTargetFPS(500)
 
 	restart :: proc() {
 		paddle_width = f32(50)
@@ -102,15 +104,18 @@ main :: proc() {
 		} else {
 			ball_pos += ball_dir * ball_speed * rl.GetFrameTime()
 
-			if ball_pos.x + BALL_RADIUS >= PIXEL_SCREEN_WIDTH {
+			if ball_pos.x + BALL_RADIUS > PIXEL_SCREEN_WIDTH {
+				ball_pos.x = PIXEL_SCREEN_WIDTH - BALL_RADIUS
 				ball_dir = linalg.reflect(ball_dir, rl.Vector2{-1, 0})
 			} 
 
-			if ball_pos.x - BALL_RADIUS <= 0 {
+			if ball_pos.x - BALL_RADIUS < 0 {
+				ball_pos.x = BALL_RADIUS
 				ball_dir = linalg.reflect(ball_dir, rl.Vector2{1, 0})
 			}
 
-			if ball_pos.y - BALL_RADIUS <= 0 {
+			if ball_pos.y - BALL_RADIUS < 0 {
+				ball_pos.y = BALL_RADIUS
 				ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, 1})
 			}
 
@@ -130,21 +135,15 @@ main :: proc() {
 			}
 
 			if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
-				if ball_pos.x + BALL_RADIUS > block_rect.x + block_rect.width {
-					ball_dir = linalg.reflect(ball_dir, rl.Vector2{1, 0})
-				}
-
-				if ball_pos.x - BALL_RADIUS < block_rect.x {
-					ball_dir = linalg.reflect(ball_dir, rl.Vector2{-1, 0})
-				} 
-
 				if ball_pos.y - BALL_RADIUS < block_rect.y {
 					ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, -1})
-				}
-
-				if ball_pos.y + BALL_RADIUS > block_rect.y + block_rect.height {
+				} else if ball_pos.y + BALL_RADIUS > block_rect.y + block_rect.height {
 					ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, 1})
-				}
+				} else if ball_pos.x + BALL_RADIUS > block_rect.x + block_rect.width {
+					ball_dir = linalg.reflect(ball_dir, rl.Vector2{1, 0})
+				} else if ball_pos.x - BALL_RADIUS < block_rect.x {
+					ball_dir = linalg.reflect(ball_dir, rl.Vector2{-1, 0})
+				} 
 
 				unordered_remove(&blocks, i)
 				break

@@ -11,7 +11,10 @@
 			"path": "C:\\Odin\\vendor\\raylib",
 		},
 		{
-			"path": "C:\\Odin\\examples\\demo"
+			"path": "C:\\Odin\\examples\\demo",
+		},
+		{
+			"path": "C:\\repos\\raylib\\src"
 		},
 	],
 	"build_systems":
