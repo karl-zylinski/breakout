@@ -5,7 +5,7 @@ import "core:math/rand"
 import "core:math/linalg"
 import "core:math"
 import "core:fmt"
-
+/*
 Block_Color :: enum {
 	Yellow,
 	Green,
@@ -24,7 +24,7 @@ block_color_values := [Block_Color]rl.Color {
 	.Green = { 180, 245, 190, 255 },
 	.Orange = { 170, 120, 250, 255 },
 	.Red = { 250, 90, 85, 255 },
-}
+}*/
 
 PIXEL_SCREEN_WIDTH :: 320
 BACKGROUND_COLOR :: rl.Color { 150, 190, 220, 255 }
@@ -35,6 +35,33 @@ BALL_RADIUS :: 4
 BLOCK_WIDTH :: 27
 BLOCK_HEIGHT :: 10
 BLOCK_MARGIN :: 0
+NUM_BLOCKS_X :: 10
+NUM_BLOCKS_Y :: 8
+
+Block_Color :: enum {
+	Yellow,
+	Green,
+	Orange,
+	Red,
+}
+
+block_color_values := [Block_Color]rl.Color {
+	.Yellow = { 253, 249, 150, 255 },
+	.Green = { 180, 245, 190, 255 },
+	.Orange = { 170, 120, 250, 255 },
+	.Red = { 250, 90, 85, 255 },
+}
+
+row_colors := [NUM_BLOCKS_Y]Block_Color {
+	.Red,
+	.Red,
+	.Orange,
+	.Orange,
+	.Green,
+	.Green,
+	.Yellow,
+	.Yellow,
+}
 
 paddle_width: f32
 paddle_pos_x: f32
@@ -43,7 +70,15 @@ ball_speed: f32
 ball_pos: rl.Vector2
 ball_dir: rl.Vector2
 ball_attached: bool
-blocks: [dynamic]Block
+blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
+
+block_exists :: proc(x, y: int) -> bool {
+	if x < 0 || y < 0 || x >= NUM_BLOCKS_X || y >= NUM_BLOCKS_Y {
+		return false
+	}
+
+	return blocks[x][y]
+}
 
 main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
@@ -77,9 +112,10 @@ main :: proc() {
 	}
 
 	restart()
-	for x in 0..<10 {
-		for y in 0..<8 {
-			pos := rl.Vector2 {
+	for x in 0..<NUM_BLOCKS_X {
+		for y in 0..<NUM_BLOCKS_Y {
+			blocks[x][y] = true
+			/*pos := rl.Vector2 {
 				f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
 				f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
 			}
@@ -87,7 +123,7 @@ main :: proc() {
 			append(&blocks, Block {
 				pos = pos,
 				color = Block_Color(3-y/2),
-			})
+			})*/
 		}
 	}
 
@@ -153,6 +189,48 @@ main :: proc() {
 
 			if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
 				ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, -1})	
+			}
+		}
+
+		num_blocks_x_loop: for x in 0..<NUM_BLOCKS_X {
+			for y in 0..<NUM_BLOCKS_Y {
+				if blocks[x][y] == false {
+					continue
+				}
+
+				block_rect := rl.Rectangle {
+					f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
+					f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
+					BLOCK_WIDTH,
+					BLOCK_HEIGHT,
+				}
+
+				if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
+					collision_normal: rl.Vector2
+
+					if ball_pos.y < block_rect.y && !block_exists(x, y - 1) {
+						collision_normal += {0, -1}
+					}
+
+					if ball_pos.y > block_rect.y + block_rect.height && !block_exists(x, y + 1) {
+						collision_normal += {0, 1}
+					}
+
+					if ball_pos.x < block_rect.x && !block_exists(x - 1, y) {
+						collision_normal += {-1, 0}
+					}
+
+					if ball_pos.x > block_rect.x + block_rect.width && !block_exists(x + 1, y) {
+						collision_normal += {1, 0}
+					}
+
+					if collision_normal != 0 {
+						ball_dir = linalg.reflect(ball_dir, linalg.normalize(collision_normal))
+					}
+
+					blocks[x][y] = false
+					break num_blocks_x_loop
+				}
 			}
 		}
 
@@ -228,78 +306,70 @@ main :: proc() {
 		rl.DrawRectangleRec(paddle_rect, PLAYER_COLOR)
 		rl.DrawCircleV(ball_pos, BALL_RADIUS, {200, 90, 20, 255})
 
-		for b in blocks {
-			block_rect := rl.Rectangle {
-				b.pos.x, b.pos.y,
-				BLOCK_WIDTH, BLOCK_HEIGHT,
+		for x in 0..<NUM_BLOCKS_X {
+			for y in 0..<NUM_BLOCKS_Y {
+				if blocks[x][y] == false {
+					continue
+				}
+
+				block_rect := rl.Rectangle {
+					f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
+					f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
+					BLOCK_WIDTH,
+					BLOCK_HEIGHT,
+				}
+
+				rl.DrawRectangleRec(block_rect, block_color_values[row_colors[y]])
+				rl.DrawRectangleLinesEx(block_rect, 1, rl.BLACK)
 			}
-
-			rl.DrawRectangleRec(block_rect, block_color_values[b.color])
-			rl.DrawRectangleLinesEx(block_rect, 1, rl.BLACK)
 		}
 
-		Collision_Faces :: enum {
-			North, East, South, West,
-		}
 
-		collided_with_faces: bit_set[Collision_Faces]
-
-		mw := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
-
+/*		mw := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
 		rl.DrawCircleV(mw, BALL_RADIUS, rl.MAGENTA)
 
-		bd := f32(BALL_RADIUS*2)
-
-		for b, i in blocks {
-			block_rect := rl.Rectangle {
-				b.pos.x, b.pos.y,
-				BLOCK_WIDTH, BLOCK_HEIGHT,
-			}
-
-			if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, block_rect) {
-				top_rect := rl.Rectangle {
-					b.pos.x, b.pos.y - bd,
-					BLOCK_WIDTH, bd,
+		xx: for x in 0..<NUM_BLOCKS_X {
+			for y in 0..<NUM_BLOCKS_Y {
+				if blocks[x][y] == false {
+					continue
 				}
 
-				bottom_rect := rl.Rectangle {
-					b.pos.x, b.pos.y + BLOCK_HEIGHT,
-					BLOCK_WIDTH, bd,
+				block_rect := rl.Rectangle {
+					f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
+					f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
+					BLOCK_WIDTH,
+					BLOCK_HEIGHT,
 				}
 
-				left_rect := rl.Rectangle {
-					b.pos.x - bd, b.pos.y,
-					bd-0.5, BLOCK_HEIGHT-0.5,
-				}
+				if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, block_rect) {
+					collision_normal: rl.Vector2
 
-				right_rect := rl.Rectangle {
-					b.pos.x + BLOCK_WIDTH + 0.5, b.pos.y,
-					bd - 0.5, BLOCK_HEIGHT-0.5,
-				}
+					if mw.y < block_rect.y && !block_exists(x, y - 1) {
+						collision_normal += {0, -1}
+					}
 
-				if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, top_rect) {
-					collided_with_faces += {.North}
-					rl.DrawRectangleRec(top_rect, {255, 0, 0, 100})
-				}
+					if mw.y > block_rect.y + block_rect.height && !block_exists(x, y + 1) {
+						collision_normal += {0, 1}
+					}
 
-				if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, bottom_rect) {
-					collided_with_faces += {.South}
-					rl.DrawRectangleRec(bottom_rect, {255, 0, 0, 100})
-				}
+					if mw.x < block_rect.x && !block_exists(x - 1, y) {
+						collision_normal += {-1, 0}
+					}
 
-				if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, left_rect) {
-					collided_with_faces += {.West}
-					rl.DrawRectangleRec(left_rect, {255, 0, 0, 100})
-				}
+					if mw.x > block_rect.x + block_rect.width && !block_exists(x + 1, y) {
+						collision_normal += {1, 0}
+					}
 
-				if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, right_rect) {
-					collided_with_faces += {.East}
-					rl.DrawRectangleRec(right_rect, {255, 0, 0, 100})
+					if collision_normal != 0 {
+						rl.DrawLineEx(mw, mw + linalg.normalize0(collision_normal)*10, 2, rl.RED)
+					}
+
+					break xx
 				}
 			}
 		}
-
-		if collided_with_faces != nil {
+*/
+		/*if collided_with_faces != nil {
 			reflection_normal: rl.Vector2
 
 			if .North in collided_with_faces {
@@ -324,7 +394,7 @@ main :: proc() {
 			/*for bi in blocks_to_remove {
 				unordered_remove(&blocks, bi)
 			}*/
-		}
+		}*/
 
 /*
 		for b, i in blocks {
