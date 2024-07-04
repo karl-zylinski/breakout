@@ -62,14 +62,14 @@ block_exists :: proc(x, y: int) -> bool {
 main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
-	rl.SetTargetFPS(10)
+	rl.SetTargetFPS(500)
 
 	restart :: proc() {
 		paddle_width = f32(50)
 		paddle_pos_x = f32(PIXEL_SCREEN_WIDTH)/2 - paddle_width/2
 		move_speed = f32(200)
 		ball_moving = false
-		ball_speed = f32(200)
+		ball_speed = f32(240)
 		ball_pos = {
 			PIXEL_SCREEN_WIDTH/2,
 			160,
@@ -147,10 +147,9 @@ main :: proc() {
 		}
 
 		if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
-			collision_normal: rl.Vector2
+			collision_normal := rl.Vector2{0, -1}
 
 			if ball_pos.y < paddle_rect.y {
-				collision_normal += {0, -1}
 				ball_pos.y = paddle_rect.y - BALL_RADIUS
 			}
 
