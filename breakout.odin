@@ -5,26 +5,6 @@ import "core:math/rand"
 import "core:math/linalg"
 import "core:math"
 import "core:fmt"
-/*
-Block_Color :: enum {
-	Yellow,
-	Green,
-	Orange,
-	Red,
-}
-
-Block :: struct {
-	pos: rl.Vector2,
-	color: Block_Color,
-}
-
-
-block_color_values := [Block_Color]rl.Color {
-	.Yellow = { 253, 249, 150, 255 },
-	.Green = { 180, 245, 190, 255 },
-	.Orange = { 170, 120, 250, 255 },
-	.Red = { 250, 90, 85, 255 },
-}*/
 
 PIXEL_SCREEN_WIDTH :: 320
 BACKGROUND_COLOR :: rl.Color { 150, 190, 220, 255 }
@@ -32,9 +12,8 @@ PLAYER_COLOR :: rl.Color { 50, 150, 90, 255 }
 PADDLE_POS_Y :: 260
 PADDLE_HEIGHT :: 10
 BALL_RADIUS :: 4
-BLOCK_WIDTH :: 27
+BLOCK_WIDTH :: 28
 BLOCK_HEIGHT :: 10
-BLOCK_MARGIN :: 0
 NUM_BLOCKS_X :: 10
 NUM_BLOCKS_Y :: 8
 
@@ -69,7 +48,7 @@ move_speed: f32
 ball_speed: f32
 ball_pos: rl.Vector2
 ball_dir: rl.Vector2
-ball_attached: bool
+ball_moving: bool
 blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
 
 block_exists :: proc(x, y: int) -> bool {
@@ -83,49 +62,28 @@ block_exists :: proc(x, y: int) -> bool {
 main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
-	rl.SetTargetFPS(500)
+	rl.SetTargetFPS(10)
 
 	restart :: proc() {
 		paddle_width = f32(50)
 		paddle_pos_x = f32(PIXEL_SCREEN_WIDTH)/2 - paddle_width/2
 		move_speed = f32(200)
-		ball_attached = true
+		ball_moving = false
 		ball_speed = f32(200)
-		ball_pos = {}
+		ball_pos = {
+			PIXEL_SCREEN_WIDTH/2,
+			160,
+		}
 		ball_dir = {}
 
-		/*clear(&blocks)
-
-		for x in 0..<10 {
-			for y in 0..<8 {
-				pos := rl.Vector2 {
-					f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
-					f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
-				}
-
-				append(&blocks, Block {
-					pos = pos,
-					color = Block_Color(3-y/2),
-				})
+		for x in 0..<NUM_BLOCKS_X {
+			for y in 0..<NUM_BLOCKS_Y {
+				blocks[x][y] = true
 			}
-		}*/
+		}
 	}
 
 	restart()
-	for x in 0..<NUM_BLOCKS_X {
-		for y in 0..<NUM_BLOCKS_Y {
-			blocks[x][y] = true
-			/*pos := rl.Vector2 {
-				f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
-				f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
-			}
-
-			append(&blocks, Block {
-				pos = pos,
-				color = Block_Color(3-y/2),
-			})*/
-		}
-	}
 
 	camera := rl.Camera2D {
 		zoom = f32(rl.GetScreenHeight())/PIXEL_SCREEN_WIDTH
@@ -137,19 +95,50 @@ main :: proc() {
 			ball_pos.x = paddle_pos_x + paddle_width/2
 			ball_pos.y = PADDLE_POS_Y - BALL_RADIUS
 			ball_dir = linalg.normalize0(rl.GetScreenToWorld2D(rl.GetMousePosition(), camera) - ball_pos)
-			ball_attached = false
+			ball_moving = true
 		}
 
 		// UPDATE
 
+		if !ball_moving && rl.IsKeyPressed(.SPACE) {
+			ball_dir = rl.Vector2Rotate(rl.Vector2 {0, 1}, math.smoothstep(f32(-math.TAU/5), math.TAU/5, rand.float32()))
+			ball_moving = true
+		}
+
+		if ball_moving {
+			ball_pos += ball_dir * ball_speed * rl.GetFrameTime()
+		}
+
+		if ball_pos.x + BALL_RADIUS > PIXEL_SCREEN_WIDTH {
+			ball_pos.x = PIXEL_SCREEN_WIDTH - BALL_RADIUS
+			ball_dir = linalg.reflect(ball_dir, rl.Vector2{-1, 0})
+		} 
+
+		if ball_pos.x - BALL_RADIUS < 0 {
+			ball_pos.x = BALL_RADIUS
+			ball_dir = linalg.reflect(ball_dir, rl.Vector2{1, 0})
+		}
+
+		if ball_pos.y - BALL_RADIUS < 0 {
+			ball_pos.y = BALL_RADIUS
+			ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, 1})
+		}
+
+		if ball_pos.y + BALL_RADIUS*2 > PIXEL_SCREEN_WIDTH {
+			restart()
+		}
+
+		paddle_move_velocity: f32
+
 		if rl.IsKeyDown(.LEFT) {
-			paddle_pos_x -= rl.GetFrameTime() * move_speed
+			paddle_move_velocity -= move_speed
 		}
 
 		if rl.IsKeyDown(.RIGHT) {
-			paddle_pos_x += rl.GetFrameTime() * move_speed
+			paddle_move_velocity += move_speed
 		}
 
+		paddle_pos_x += paddle_move_velocity * rl.GetFrameTime()
 		paddle_pos_x = clamp(paddle_pos_x, 0, PIXEL_SCREEN_WIDTH - paddle_width)
 		
 		paddle_rect := rl.Rectangle {
@@ -157,38 +146,34 @@ main :: proc() {
 			paddle_width, PADDLE_HEIGHT,
 		}
 
-		if ball_attached { 
-			ball_pos.x = paddle_pos_x + paddle_width/2
-			ball_pos.y = PADDLE_POS_Y - BALL_RADIUS
+		if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
+			collision_normal: rl.Vector2
 
-			if rl.IsKeyPressed(.SPACE) {
-				ball_dir = rl.Vector2Rotate(rl.Vector2 {0, -1}, math.smoothstep(f32(-math.TAU/5), math.TAU/5, rand.float32()))
-				ball_attached = false
-			}
-		} else {
-			ball_pos += ball_dir * ball_speed * rl.GetFrameTime()
-
-			if ball_pos.x + BALL_RADIUS > PIXEL_SCREEN_WIDTH {
-				ball_pos.x = PIXEL_SCREEN_WIDTH - BALL_RADIUS
-				ball_dir = linalg.reflect(ball_dir, rl.Vector2{-1, 0})
-			} 
-
-			if ball_pos.x - BALL_RADIUS < 0 {
-				ball_pos.x = BALL_RADIUS
-				ball_dir = linalg.reflect(ball_dir, rl.Vector2{1, 0})
+			if ball_pos.y < paddle_rect.y {
+				collision_normal += {0, -1}
+				ball_pos.y = paddle_rect.y - BALL_RADIUS
 			}
 
-			if ball_pos.y - BALL_RADIUS < 0 {
-				ball_pos.y = BALL_RADIUS
-				ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, 1})
+			if ball_pos.x < paddle_rect.x {
+				collision_normal += {-1, 0}
+				ball_pos.x = paddle_rect.x - BALL_RADIUS
 			}
 
-			if ball_pos.y + BALL_RADIUS > PIXEL_SCREEN_WIDTH {
-				restart()
+			if ball_pos.x > paddle_rect.x + paddle_rect.width {
+				collision_normal += {1, 0}
+				ball_pos.x = paddle_rect.x + paddle_rect.width + BALL_RADIUS
 			}
 
-			if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
-				ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, -1})	
+			if collision_normal != 0 {
+				ball_dir = linalg.normalize(linalg.reflect(ball_dir, linalg.normalize(collision_normal)))
+			}
+
+			if paddle_move_velocity > 0 {
+				ball_dir = linalg.normalize(ball_dir + (ball_dir.x > 0 ? 0.1 : 0.2))
+			}
+
+			if paddle_move_velocity < 0 {
+				ball_dir = linalg.normalize(ball_dir - (ball_dir.x < 0 ? 0.1 : 0.2))
 			}
 		}
 
@@ -199,8 +184,8 @@ main :: proc() {
 				}
 
 				block_rect := rl.Rectangle {
-					f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
-					f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
+					f32(20 + x * BLOCK_WIDTH),
+					f32(40 + y * BLOCK_HEIGHT),
 					BLOCK_WIDTH,
 					BLOCK_HEIGHT,
 				}
@@ -234,69 +219,6 @@ main :: proc() {
 			}
 		}
 
-		/*Collision_Faces :: enum {
-			North, East, South, West,
-		}
-		collided_with_faces: bit_set[Collision_Faces]
-
-		blocks_to_remove := make([dynamic]int, context.temp_allocator)
-
-		for b, i in blocks {
-			block_rect := rl.Rectangle {
-				b.pos.x, b.pos.y,
-				BLOCK_WIDTH, BLOCK_HEIGHT,
-			}
-
-			if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
-				if ball_pos.y < block_rect.y {
-					collided_with_faces += {.North}
-				}
-
-				if ball_pos.y > block_rect.y + block_rect.height {
-					collided_with_faces += {.South}
-				}
-
-				if ball_pos.x < block_rect.x {
-					collided_with_faces += {.West}
-				}
-
-				if ball_pos.x > block_rect.x + block_rect.width {
-					collided_with_faces += {.East}
-				}
-
-				append(&blocks_to_remove, i)
-			}
-		}
-
-		if collided_with_faces != nil {
-			reflection_normal: rl.Vector2
-
-			if .North in collided_with_faces {
-				reflection_normal += {0, -1}
-			}
-
-			if .South in collided_with_faces {
-				reflection_normal += {0, 1}
-			}
-
-			if .West in collided_with_faces {
-				reflection_normal += {-1, 0}
-			}
-
-			if .East in collided_with_faces {
-				reflection_normal += {1, 0}
-			}
-
-			fmt.println(reflection_normal)
-			fmt.println(linalg.normalize0(reflection_normal))
-			ball_dir = linalg.reflect(ball_dir, linalg.normalize0(reflection_normal))
-
-			/*for bi in blocks_to_remove {
-				unordered_remove(&blocks, bi)
-			}*/
-		}*/
-
-
 		// DRAW
 
 		rl.BeginDrawing()
@@ -313,149 +235,35 @@ main :: proc() {
 				}
 
 				block_rect := rl.Rectangle {
-					f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
-					f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
+					f32(20 + x * BLOCK_WIDTH),
+					f32(40 + y * BLOCK_HEIGHT),
 					BLOCK_WIDTH,
 					BLOCK_HEIGHT,
+				}
+
+				top_left := rl.Vector2 {
+					block_rect.x, block_rect.y
+				}
+
+				top_right := rl.Vector2 {
+					block_rect.x + block_rect.width, block_rect.y
+				}
+
+				bottom_left := rl.Vector2 {
+					block_rect.x, block_rect.y + block_rect.height
+				}
+
+				bottom_right := rl.Vector2 {
+					block_rect.x + block_rect.width, block_rect.y + block_rect.height
 				}
 
 				rl.DrawRectangleRec(block_rect, block_color_values[row_colors[y]])
-				rl.DrawRectangleLinesEx(block_rect, 1, rl.BLACK)
+				rl.DrawLineEx(top_left, top_right, 1, {255, 255, 150, 100})
+				rl.DrawLineEx(top_left, bottom_left, 1, {255, 255, 150, 100})
+				rl.DrawLineEx(bottom_left, bottom_right, 1, {0, 0, 50, 100})
+				rl.DrawLineEx(top_right, bottom_right, 1, {0, 0, 50, 100})
 			}
 		}
-
-
-/*		mw := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
-		rl.DrawCircleV(mw, BALL_RADIUS, rl.MAGENTA)
-
-		xx: for x in 0..<NUM_BLOCKS_X {
-			for y in 0..<NUM_BLOCKS_Y {
-				if blocks[x][y] == false {
-					continue
-				}
-
-				block_rect := rl.Rectangle {
-					f32(20 + x * BLOCK_WIDTH + x * BLOCK_MARGIN),
-					f32(40 + y * BLOCK_HEIGHT + y * BLOCK_MARGIN),
-					BLOCK_WIDTH,
-					BLOCK_HEIGHT,
-				}
-
-				if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, block_rect) {
-					collision_normal: rl.Vector2
-
-					if mw.y < block_rect.y && !block_exists(x, y - 1) {
-						collision_normal += {0, -1}
-					}
-
-					if mw.y > block_rect.y + block_rect.height && !block_exists(x, y + 1) {
-						collision_normal += {0, 1}
-					}
-
-					if mw.x < block_rect.x && !block_exists(x - 1, y) {
-						collision_normal += {-1, 0}
-					}
-
-					if mw.x > block_rect.x + block_rect.width && !block_exists(x + 1, y) {
-						collision_normal += {1, 0}
-					}
-
-					if collision_normal != 0 {
-						rl.DrawLineEx(mw, mw + linalg.normalize0(collision_normal)*10, 2, rl.RED)
-					}
-
-					break xx
-				}
-			}
-		}
-*/
-		/*if collided_with_faces != nil {
-			reflection_normal: rl.Vector2
-
-			if .North in collided_with_faces {
-				reflection_normal += {0, -1}
-			}
-
-			if .South in collided_with_faces {
-				reflection_normal += {0, 1}
-			}
-
-			if .West in collided_with_faces {
-				reflection_normal += {-1, 0}
-			}
-
-			if .East in collided_with_faces {
-				reflection_normal += {1, 0}
-			}
-
-
-			rl.DrawLineEx(mw, mw + linalg.normalize0(reflection_normal)*10, 2, rl.RED)
-
-			/*for bi in blocks_to_remove {
-				unordered_remove(&blocks, bi)
-			}*/
-		}*/
-
-/*
-		for b, i in blocks {
-			block_rect := rl.Rectangle {
-				b.pos.x, b.pos.y,
-				BLOCK_WIDTH, BLOCK_HEIGHT,
-			}
-
-			/*if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
-				nearest_edge_dist := abs(block_rect.y - ball_pos.y)
-				edge_normal := rl.Vector2 {0, -1}
-
-				if d := abs(block_rect.y + block_rect.height - ball_pos.y); d < nearest_edge_dist {
-					nearest_edge_dist = d
-					edge_normal = {0, 1}
-				}
-
-				if d := abs(block_rect.x - ball_pos.x); d < nearest_edge_dist {
-					nearest_edge_dist = d
-					edge_normal = {-1, 0}
-				}
-				
-				if d := abs(block_rect.x + block_rect.width - ball_pos.x); d < nearest_edge_dist {
-					nearest_edge_dist = d
-					edge_normal = {1, 0}
-				}
-
-
-				ball_dir = linalg.reflect(ball_dir, edge_normal)
-				unordered_remove(&blocks, i)
-				break
-			}*/
-
-
-			mw := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
-			if rl.CheckCollisionCircleRec(mw, BALL_RADIUS, block_rect) {
-				nearest_edge_dist := abs(block_rect.y - mw.y)
-				edge_normal := rl.Vector2 {0, -1}
-
-				if d := abs(block_rect.y + block_rect.height - mw.y); d < nearest_edge_dist {
-					nearest_edge_dist = d
-					edge_normal = {0, 1}
-				}
-
-				if d := abs(block_rect.x - mw.x); d < nearest_edge_dist {
-					nearest_edge_dist = d
-					edge_normal = {-1, 0}
-				}
-				
-				if d := abs(block_rect.x + block_rect.width - mw.x); d < nearest_edge_dist {
-					nearest_edge_dist = d
-					edge_normal = {1, 0}
-				}
-
-
-				//ball_dir = linalg.reflect(ball_dir, edge_normal)
-				rl.DrawLineEx(mw, mw + edge_normal*10, 2, rl.RED)
-			/*	unordered_remove(&blocks, i)
-				break*/
-			}
-		}*/
 
 		rl.EndMode2D()
 		rl.EndDrawing()
