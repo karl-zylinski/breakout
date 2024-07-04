@@ -10,7 +10,8 @@ PIXEL_SCREEN_WIDTH :: 320
 BACKGROUND_COLOR :: rl.Color { 150, 190, 220, 255 }
 PLAYER_COLOR :: rl.Color { 50, 150, 90, 255 }
 PADDLE_POS_Y :: 260
-PADDLE_HEIGHT :: 10
+PADDLE_WIDTH :: 50
+PADDLE_HEIGHT :: 6
 BALL_RADIUS :: 4
 BLOCK_WIDTH :: 28
 BLOCK_HEIGHT :: 10
@@ -42,7 +43,6 @@ row_colors := [NUM_BLOCKS_Y]Block_Color {
 	.Yellow,
 }
 
-paddle_width: f32
 paddle_pos_x: f32
 move_speed: f32
 ball_speed: f32
@@ -64,9 +64,11 @@ main :: proc() {
 	rl.InitWindow(1280, 1280, "Breakout!")
 	rl.SetTargetFPS(500)
 
+	ball_texture := rl.LoadTexture("ball.png")
+	paddle_texture := rl.LoadTexture("paddle.png")
+
 	restart :: proc() {
-		paddle_width = f32(50)
-		paddle_pos_x = f32(PIXEL_SCREEN_WIDTH)/2 - paddle_width/2
+		paddle_pos_x = f32(PIXEL_SCREEN_WIDTH)/2 - PADDLE_WIDTH/2
 		move_speed = f32(200)
 		ball_moving = false
 		ball_speed = f32(240)
@@ -92,7 +94,7 @@ main :: proc() {
 	for !rl.WindowShouldClose() {
 		if rl.IsMouseButtonPressed(.LEFT) {
 			restart()
-			ball_pos.x = paddle_pos_x + paddle_width/2
+			ball_pos.x = paddle_pos_x + PADDLE_WIDTH/2
 			ball_pos.y = PADDLE_POS_Y - BALL_RADIUS
 			ball_dir = linalg.normalize0(rl.GetScreenToWorld2D(rl.GetMousePosition(), camera) - ball_pos)
 			ball_moving = true
@@ -139,28 +141,32 @@ main :: proc() {
 		}
 
 		paddle_pos_x += paddle_move_velocity * rl.GetFrameTime()
-		paddle_pos_x = clamp(paddle_pos_x, 0, PIXEL_SCREEN_WIDTH - paddle_width)
+		paddle_pos_x = clamp(paddle_pos_x, 0, PIXEL_SCREEN_WIDTH - PADDLE_WIDTH)
 		
 		paddle_rect := rl.Rectangle {
 			paddle_pos_x, PADDLE_POS_Y,
-			paddle_width, PADDLE_HEIGHT,
+			PADDLE_WIDTH, PADDLE_HEIGHT,
 		}
 
 		if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
-			collision_normal := rl.Vector2{0, -1}
+			collision_normal: rl.Vector2
 
-			if ball_pos.y < paddle_rect.y {
+			if ball_pos.y < paddle_rect.y + paddle_rect.height {
+				collision_normal += {0, -1}
 				ball_pos.y = paddle_rect.y - BALL_RADIUS
+			}
+
+			if ball_pos.y > paddle_rect.y {
+				collision_normal += {0, 1}
+				ball_pos.y = paddle_rect.y + paddle_rect.height + BALL_RADIUS
 			}
 
 			if ball_pos.x < paddle_rect.x {
 				collision_normal += {-1, 0}
-				ball_pos.x = paddle_rect.x - BALL_RADIUS
 			}
 
 			if ball_pos.x > paddle_rect.x + paddle_rect.width {
 				collision_normal += {1, 0}
-				ball_pos.x = paddle_rect.x + paddle_rect.width + BALL_RADIUS
 			}
 
 			if collision_normal != 0 {
@@ -224,8 +230,10 @@ main :: proc() {
 		rl.ClearBackground(BACKGROUND_COLOR)
 
 		rl.BeginMode2D(camera)
-		rl.DrawRectangleRec(paddle_rect, PLAYER_COLOR)
-		rl.DrawCircleV(ball_pos, BALL_RADIUS, {200, 90, 20, 255})
+		rl.DrawTextureV(paddle_texture, {paddle_pos_x, PADDLE_POS_Y}, rl.WHITE)
+		//rl.DrawRectangleRec(paddle_rect, PLAYER_COLOR)
+		rl.DrawTextureV(ball_texture, ball_pos - {BALL_RADIUS, BALL_RADIUS}, rl.WHITE)
+		//rl.DrawCircleV(ball_pos, BALL_RADIUS, {200, 90, 20, 255})
 
 		for x in 0..<NUM_BLOCKS_X {
 			for y in 0..<NUM_BLOCKS_Y {
