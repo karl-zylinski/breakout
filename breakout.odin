@@ -191,21 +191,11 @@ main :: proc() {
 				}
 
 				if collision_normal != 0 {
-					ball_dir = reflect_perturbe(ball_dir, linalg.normalize(collision_normal))
+					ball_dir = reflect_perturbe(ball_dir, collision_normal)
 				}
-
-				if paddle_move_velocity > 0 {
-					ball_dir = linalg.normalize(ball_dir + (ball_dir.x > 0 ? 0.1 : 0.2))
-				}
-
-				if paddle_move_velocity < 0 {
-					ball_dir = linalg.normalize(ball_dir - (ball_dir.x < 0 ? 0.1 : 0.2))
-				}
-
-				score -= 1
 			}
 
-			num_blocks_x_loop: for x in 0..<NUM_BLOCKS_X {
+			block_x_loop: for x in 0..<NUM_BLOCKS_X {
 				for y in 0..<NUM_BLOCKS_Y {
 					if blocks[x][y] == false {
 						continue
@@ -221,30 +211,38 @@ main :: proc() {
 					if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
 						collision_normal: rl.Vector2
 
-						if ball_pos.y < block_rect.y && !block_exists(x, y - 1) {
+						if ball_pos.y < block_rect.y {
 							collision_normal += {0, -1}
 						}
 
-						if ball_pos.y > block_rect.y + block_rect.height && !block_exists(x, y + 1) {
+						if ball_pos.y > block_rect.y + block_rect.height {
 							collision_normal += {0, 1}
 						}
 
-						if ball_pos.x < block_rect.x && !block_exists(x - 1, y) {
+						if ball_pos.x < block_rect.x {
 							collision_normal += {-1, 0}
 						}
 
-						if ball_pos.x > block_rect.x + block_rect.width && !block_exists(x + 1, y) {
+						if ball_pos.x > block_rect.x + block_rect.width {
 							collision_normal += {1, 0}
 						}
 
+						if block_exists(x + int(collision_normal.x), y) {
+							collision_normal.x = 0
+						}
+
+						if block_exists(x, y + int(collision_normal.y)) {
+							collision_normal.y = 0
+						}
+
 						if collision_normal != 0 {
-							ball_dir = reflect_perturbe(ball_dir, linalg.normalize(collision_normal))
+							ball_dir = reflect_perturbe(ball_dir, collision_normal)
 						}
 
 						blocks[x][y] = false
 						row_color := row_colors[y]
 						score += block_color_score[row_color]
-						break num_blocks_x_loop
+						break block_x_loop
 					}
 				}
 			}
