@@ -7,8 +7,6 @@ import "core:math"
 import "core:fmt"
 
 PIXEL_SCREEN_WIDTH :: 320
-BACKGROUND_COLOR :: rl.Color { 150, 190, 220, 255 }
-PLAYER_COLOR :: rl.Color { 50, 150, 90, 255 }
 PADDLE_POS_Y :: 260
 PADDLE_WIDTH :: 50
 PADDLE_HEIGHT :: 6
@@ -55,7 +53,7 @@ move_speed: f32
 ball_speed: f32
 ball_pos: rl.Vector2
 ball_dir: rl.Vector2
-ball_moving: bool
+started: bool
 blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
 score: int
 physics_time: f32
@@ -85,7 +83,7 @@ main :: proc() {
 	restart :: proc() {
 		paddle_pos_x = f32(PIXEL_SCREEN_WIDTH)/2 - PADDLE_WIDTH/2
 		move_speed = f32(200)
-		ball_moving = false
+		started = false
 		ball_speed = f32(240)
 		ball_pos = {
 			PIXEL_SCREEN_WIDTH/2,
@@ -113,13 +111,13 @@ main :: proc() {
 			ball_pos.x = paddle_pos_x + PADDLE_WIDTH/2
 			ball_pos.y = PADDLE_POS_Y - BALL_RADIUS
 			ball_dir = linalg.normalize0(rl.GetScreenToWorld2D(rl.GetMousePosition(), camera) - ball_pos)
-			ball_moving = true
+			started = true
 		}
 
 		// UPDATE
-		if !ball_moving && rl.IsKeyPressed(.SPACE) {
+		if !started && rl.IsKeyPressed(.SPACE) {
 			ball_dir = rl.Vector2Rotate(rl.Vector2 {0, 1}, math.lerp(f32(-math.TAU/10), math.TAU/10, rand.float32()))
-			ball_moving = true
+			started = true
 		}
 
 		paddle_move_velocity: f32
@@ -141,7 +139,7 @@ main :: proc() {
 			previous_paddle_pos_x = paddle_pos_x
 			previous_ball_pos = ball_pos
 
-			if ball_moving {
+			if started {
 				ball_pos += ball_dir * ball_speed * physics_dt
 			}
 
@@ -261,11 +259,11 @@ main :: proc() {
 		// DRAW
 
 		rl.BeginDrawing()
-		rl.ClearBackground(BACKGROUND_COLOR)
+		rl.ClearBackground({ 150, 190, 220, 255 })
 
 		rl.BeginMode2D(camera)
 		rl.DrawTextureV(paddle_texture, {paddle_render_pos_x, PADDLE_POS_Y}, rl.WHITE)
-		//rl.DrawRectangleRec(paddle_rect, PLAYER_COLOR)
+		//rl.DrawRectangleRec(paddle_rect, { 50, 150, 90, 255 })
 		rl.DrawTextureV(ball_texture, ball_render_pos - {BALL_RADIUS, BALL_RADIUS}, rl.WHITE)
 		//rl.DrawCircleV(ball_pos, BALL_RADIUS, {200, 90, 20, 255})
 
