@@ -6,10 +6,12 @@ import "core:math/linalg"
 import "core:math"
 import "core:fmt"
 
-PIXEL_SCREEN_WIDTH :: 320
+SCREEN_SIZE :: 320
 PADDLE_POS_Y :: 260
 PADDLE_WIDTH :: 50
 PADDLE_HEIGHT :: 6
+PADDLE_SPEED :: 200
+BALL_SPEED :: 240
 BALL_RADIUS :: 4
 BLOCK_WIDTH :: 28
 BLOCK_HEIGHT :: 10
@@ -49,14 +51,12 @@ row_colors := [NUM_BLOCKS_Y]Block_Color {
 }
 
 paddle_pos_x: f32
-move_speed: f32
-ball_speed: f32
 ball_pos: rl.Vector2
 ball_dir: rl.Vector2
 started: bool
 blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
 score: int
-physics_time: f32
+accumulated_time: f32
 
 block_exists :: proc(x, y: int) -> bool {
 	if x < 0 || y < 0 || x >= NUM_BLOCKS_X || y >= NUM_BLOCKS_Y {
@@ -81,12 +81,10 @@ main :: proc() {
 	paddle_texture := rl.LoadTexture("paddle.png")
 
 	restart :: proc() {
-		paddle_pos_x = f32(PIXEL_SCREEN_WIDTH)/2 - PADDLE_WIDTH/2
-		move_speed = f32(200)
+		paddle_pos_x = f32(SCREEN_SIZE)/2 - PADDLE_WIDTH/2
 		started = false
-		ball_speed = f32(240)
 		ball_pos = {
-			PIXEL_SCREEN_WIDTH/2,
+			SCREEN_SIZE/2,
 			160,
 		}
 		ball_dir = {}
@@ -102,7 +100,7 @@ main :: proc() {
 	restart()
 
 	camera := rl.Camera2D {
-		zoom = f32(rl.GetScreenHeight())/PIXEL_SCREEN_WIDTH
+		zoom = f32(rl.GetScreenHeight())/SCREEN_SIZE
 	}
 
 	for !rl.WindowShouldClose() {
@@ -120,31 +118,22 @@ main :: proc() {
 			started = true
 		}
 
-		paddle_move_velocity: f32
-
-		if rl.IsKeyDown(.LEFT) {
-			paddle_move_velocity -= move_speed
-		}
-
-		if rl.IsKeyDown(.RIGHT) {
-			paddle_move_velocity += move_speed
-		}
-
 		previous_paddle_pos_x := paddle_pos_x
 		previous_ball_pos := ball_pos
-		physics_time += rl.GetFrameTime() 
-		physics_dt :: 1.0/60.0 /// 0.016s
+		accumulated_time += rl.GetFrameTime() 
 
-		for physics_time > physics_dt {
+		DT :: 1.0/60.0 /// 0.016s
+
+		for accumulated_time > DT {
 			previous_paddle_pos_x = paddle_pos_x
 			previous_ball_pos = ball_pos
 
 			if started {
-				ball_pos += ball_dir * ball_speed * physics_dt
+				ball_pos += ball_dir * BALL_SPEED * DT
 			}
 
-			if ball_pos.x + BALL_RADIUS > PIXEL_SCREEN_WIDTH {
-				ball_pos.x = PIXEL_SCREEN_WIDTH - BALL_RADIUS
+			if ball_pos.x + BALL_RADIUS > SCREEN_SIZE {
+				ball_pos.x = SCREEN_SIZE - BALL_RADIUS
 				ball_dir = reflect_perturbe(ball_dir, {-1, 0})
 			} 
 
@@ -158,11 +147,22 @@ main :: proc() {
 				ball_dir = reflect_perturbe(ball_dir, {0, 1})
 			}
 
-			if ball_pos.y > PIXEL_SCREEN_WIDTH + BALL_RADIUS*10 {
+			if ball_pos.y > SCREEN_SIZE + BALL_RADIUS*10 {
 				restart()
 			}
-			paddle_pos_x += paddle_move_velocity * physics_dt
-			paddle_pos_x = clamp(paddle_pos_x, 0, PIXEL_SCREEN_WIDTH - PADDLE_WIDTH)
+
+			paddle_move_velocity: f32
+
+			if rl.IsKeyDown(.LEFT) {
+				paddle_move_velocity -= PADDLE_SPEED
+			}
+
+			if rl.IsKeyDown(.RIGHT) {
+				paddle_move_velocity += PADDLE_SPEED
+			}
+
+			paddle_pos_x += paddle_move_velocity * DT
+			paddle_pos_x = clamp(paddle_pos_x, 0, SCREEN_SIZE - PADDLE_WIDTH)
 			
 			paddle_rect := rl.Rectangle {
 				paddle_pos_x, PADDLE_POS_Y,
@@ -249,12 +249,12 @@ main :: proc() {
 				}
 			}
 
-			physics_time -= physics_dt
+			accumulated_time -= DT
 		}
 
-		physics_blend_t := physics_time / f32(physics_dt)
-		ball_render_pos := math.lerp(previous_ball_pos, ball_pos, physics_blend_t)
-		paddle_render_pos_x := math.lerp(previous_paddle_pos_x, paddle_pos_x, physics_blend_t)
+		blend := accumulated_time / f32(DT)
+		ball_render_pos := math.lerp(previous_ball_pos, ball_pos, blend)
+		paddle_render_pos_x := math.lerp(previous_paddle_pos_x, paddle_pos_x, blend)
 
 		// DRAW
 
