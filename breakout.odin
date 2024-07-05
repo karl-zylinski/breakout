@@ -25,6 +25,13 @@ Block_Color :: enum {
 	Red,
 }
 
+block_color_score := [Block_Color]int {
+	.Yellow = 2,
+	.Green = 4,
+	.Orange = 6,
+	.Red = 8,
+}
+
 block_color_values := [Block_Color]rl.Color {
 	.Yellow = { 253, 249, 150, 255 },
 	.Green = { 180, 245, 190, 255 },
@@ -50,6 +57,7 @@ ball_pos: rl.Vector2
 ball_dir: rl.Vector2
 ball_moving: bool
 blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
+score: int
 
 block_exists :: proc(x, y: int) -> bool {
 	if x < 0 || y < 0 || x >= NUM_BLOCKS_X || y >= NUM_BLOCKS_Y {
@@ -60,9 +68,9 @@ block_exists :: proc(x, y: int) -> bool {
 }
 
 main :: proc() {
-	rl.SetConfigFlags({.VSYNC_HINT})
+	//rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
-	rl.SetTargetFPS(500)
+	rl.SetTargetFPS(50)
 
 	ball_texture := rl.LoadTexture("ball.png")
 	paddle_texture := rl.LoadTexture("paddle.png")
@@ -77,6 +85,7 @@ main :: proc() {
 			160,
 		}
 		ball_dir = {}
+		score = 0
 
 		for x in 0..<NUM_BLOCKS_X {
 			for y in 0..<NUM_BLOCKS_Y {
@@ -103,7 +112,7 @@ main :: proc() {
 		// UPDATE
 
 		if !ball_moving && rl.IsKeyPressed(.SPACE) {
-			ball_dir = rl.Vector2Rotate(rl.Vector2 {0, 1}, math.smoothstep(f32(-math.TAU/5), math.TAU/5, rand.float32()))
+			ball_dir = rl.Vector2Rotate(rl.Vector2 {0, 1}, math.lerp(f32(-math.TAU/5), math.TAU/5, rand.float32()))
 			ball_moving = true
 		}
 
@@ -180,6 +189,8 @@ main :: proc() {
 			if paddle_move_velocity < 0 {
 				ball_dir = linalg.normalize(ball_dir - (ball_dir.x < 0 ? 0.1 : 0.2))
 			}
+
+			score -= 1
 		}
 
 		num_blocks_x_loop: for x in 0..<NUM_BLOCKS_X {
@@ -219,6 +230,8 @@ main :: proc() {
 					}
 
 					blocks[x][y] = false
+					row_color := row_colors[y]
+					score += block_color_score[row_color]
 					break num_blocks_x_loop
 				}
 			}
@@ -272,8 +285,13 @@ main :: proc() {
 			}
 		}
 
+		score_text := fmt.ctprint(score)
+		rl.DrawText(score_text, 5, 5, 10, rl.WHITE)
+
 		rl.EndMode2D()
 		rl.EndDrawing()
+
+		free_all(context.temp_allocator)
 	}
 
 	rl.CloseWindow()
