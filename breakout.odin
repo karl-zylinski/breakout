@@ -58,6 +58,7 @@ ball_dir: rl.Vector2
 ball_moving: bool
 blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
 score: int
+physics_time: f32
 
 block_exists :: proc(x, y: int) -> bool {
 	if x < 0 || y < 0 || x >= NUM_BLOCKS_X || y >= NUM_BLOCKS_Y {
@@ -67,10 +68,16 @@ block_exists :: proc(x, y: int) -> bool {
 	return blocks[x][y]
 }
 
+reflect_perturbe :: proc(dir: rl.Vector2, normal: rl.Vector2) -> rl.Vector2 {
+	r := linalg.reflect(dir, linalg.normalize(normal))
+	rot_angle := math.lerp(f32(-math.TAU/40), math.TAU/40, rand.float32())
+	return linalg.normalize(rl.Vector2Rotate(r, rot_angle))
+}
+
 main :: proc() {
-	//rl.SetConfigFlags({.VSYNC_HINT})
+	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
-	rl.SetTargetFPS(50)
+	rl.SetTargetFPS(500)
 
 	ball_texture := rl.LoadTexture("ball.png")
 	paddle_texture := rl.LoadTexture("paddle.png")
@@ -110,33 +117,9 @@ main :: proc() {
 		}
 
 		// UPDATE
-
 		if !ball_moving && rl.IsKeyPressed(.SPACE) {
-			ball_dir = rl.Vector2Rotate(rl.Vector2 {0, 1}, math.lerp(f32(-math.TAU/5), math.TAU/5, rand.float32()))
+			ball_dir = rl.Vector2Rotate(rl.Vector2 {0, 1}, math.lerp(f32(-math.TAU/10), math.TAU/10, rand.float32()))
 			ball_moving = true
-		}
-
-		if ball_moving {
-			ball_pos += ball_dir * ball_speed * rl.GetFrameTime()
-		}
-
-		if ball_pos.x + BALL_RADIUS > PIXEL_SCREEN_WIDTH {
-			ball_pos.x = PIXEL_SCREEN_WIDTH - BALL_RADIUS
-			ball_dir = linalg.reflect(ball_dir, rl.Vector2{-1, 0})
-		} 
-
-		if ball_pos.x - BALL_RADIUS < 0 {
-			ball_pos.x = BALL_RADIUS
-			ball_dir = linalg.reflect(ball_dir, rl.Vector2{1, 0})
-		}
-
-		if ball_pos.y - BALL_RADIUS < 0 {
-			ball_pos.y = BALL_RADIUS
-			ball_dir = linalg.reflect(ball_dir, rl.Vector2{0, 1})
-		}
-
-		if ball_pos.y + BALL_RADIUS*2 > PIXEL_SCREEN_WIDTH {
-			restart()
 		}
 
 		paddle_move_velocity: f32
@@ -149,93 +132,131 @@ main :: proc() {
 			paddle_move_velocity += move_speed
 		}
 
-		paddle_pos_x += paddle_move_velocity * rl.GetFrameTime()
-		paddle_pos_x = clamp(paddle_pos_x, 0, PIXEL_SCREEN_WIDTH - PADDLE_WIDTH)
-		
-		paddle_rect := rl.Rectangle {
-			paddle_pos_x, PADDLE_POS_Y,
-			PADDLE_WIDTH, PADDLE_HEIGHT,
-		}
+		previous_paddle_pos_x := paddle_pos_x
+		previous_ball_pos := ball_pos
+		physics_time += rl.GetFrameTime() 
+		physics_dt :: 1.0/60.0 /// 0.016s
 
-		if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
-			collision_normal: rl.Vector2
+		for physics_time > physics_dt {
+			previous_paddle_pos_x = paddle_pos_x
+			previous_ball_pos = ball_pos
 
-			if ball_pos.y < paddle_rect.y + paddle_rect.height {
-				collision_normal += {0, -1}
-				ball_pos.y = paddle_rect.y - BALL_RADIUS
+			if ball_moving {
+				ball_pos += ball_dir * ball_speed * physics_dt
 			}
 
-			if ball_pos.y > paddle_rect.y {
-				collision_normal += {0, 1}
-				ball_pos.y = paddle_rect.y + paddle_rect.height + BALL_RADIUS
+			if ball_pos.x + BALL_RADIUS > PIXEL_SCREEN_WIDTH {
+				ball_pos.x = PIXEL_SCREEN_WIDTH - BALL_RADIUS
+				ball_dir = reflect_perturbe(ball_dir, {-1, 0})
+			} 
+
+			if ball_pos.x - BALL_RADIUS < 0 {
+				ball_pos.x = BALL_RADIUS
+				ball_dir = reflect_perturbe(ball_dir, {1, 0})
 			}
 
-			if ball_pos.x < paddle_rect.x {
-				collision_normal += {-1, 0}
+			if ball_pos.y - BALL_RADIUS < 0 {
+				ball_pos.y = BALL_RADIUS
+				ball_dir = reflect_perturbe(ball_dir, {0, 1})
 			}
 
-			if ball_pos.x > paddle_rect.x + paddle_rect.width {
-				collision_normal += {1, 0}
+			if ball_pos.y > PIXEL_SCREEN_WIDTH + BALL_RADIUS*10 {
+				restart()
+			}
+			paddle_pos_x += paddle_move_velocity * physics_dt
+			paddle_pos_x = clamp(paddle_pos_x, 0, PIXEL_SCREEN_WIDTH - PADDLE_WIDTH)
+			
+			paddle_rect := rl.Rectangle {
+				paddle_pos_x, PADDLE_POS_Y,
+				PADDLE_WIDTH, PADDLE_HEIGHT,
 			}
 
-			if collision_normal != 0 {
-				ball_dir = linalg.normalize(linalg.reflect(ball_dir, linalg.normalize(collision_normal)))
-			}
+			if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
+				collision_normal: rl.Vector2
 
-			if paddle_move_velocity > 0 {
-				ball_dir = linalg.normalize(ball_dir + (ball_dir.x > 0 ? 0.1 : 0.2))
-			}
-
-			if paddle_move_velocity < 0 {
-				ball_dir = linalg.normalize(ball_dir - (ball_dir.x < 0 ? 0.1 : 0.2))
-			}
-
-			score -= 1
-		}
-
-		num_blocks_x_loop: for x in 0..<NUM_BLOCKS_X {
-			for y in 0..<NUM_BLOCKS_Y {
-				if blocks[x][y] == false {
-					continue
+				if ball_pos.y < paddle_rect.y + paddle_rect.height {
+					collision_normal += {0, -1}
+					ball_pos.y = paddle_rect.y - BALL_RADIUS
 				}
 
-				block_rect := rl.Rectangle {
-					f32(20 + x * BLOCK_WIDTH),
-					f32(40 + y * BLOCK_HEIGHT),
-					BLOCK_WIDTH,
-					BLOCK_HEIGHT,
+				if ball_pos.y > paddle_rect.y {
+					collision_normal += {0, 1}
+					ball_pos.y = paddle_rect.y + paddle_rect.height + BALL_RADIUS
 				}
 
-				if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
-					collision_normal: rl.Vector2
+				if ball_pos.x < paddle_rect.x {
+					collision_normal += {-1, 0}
+				}
 
-					if ball_pos.y < block_rect.y && !block_exists(x, y - 1) {
-						collision_normal += {0, -1}
+				if ball_pos.x > paddle_rect.x + paddle_rect.width {
+					collision_normal += {1, 0}
+				}
+
+				if collision_normal != 0 {
+					ball_dir = reflect_perturbe(ball_dir, linalg.normalize(collision_normal))
+				}
+
+				if paddle_move_velocity > 0 {
+					ball_dir = linalg.normalize(ball_dir + (ball_dir.x > 0 ? 0.1 : 0.2))
+				}
+
+				if paddle_move_velocity < 0 {
+					ball_dir = linalg.normalize(ball_dir - (ball_dir.x < 0 ? 0.1 : 0.2))
+				}
+
+				score -= 1
+			}
+
+			num_blocks_x_loop: for x in 0..<NUM_BLOCKS_X {
+				for y in 0..<NUM_BLOCKS_Y {
+					if blocks[x][y] == false {
+						continue
 					}
 
-					if ball_pos.y > block_rect.y + block_rect.height && !block_exists(x, y + 1) {
-						collision_normal += {0, 1}
+					block_rect := rl.Rectangle {
+						f32(20 + x * BLOCK_WIDTH),
+						f32(40 + y * BLOCK_HEIGHT),
+						BLOCK_WIDTH,
+						BLOCK_HEIGHT,
 					}
 
-					if ball_pos.x < block_rect.x && !block_exists(x - 1, y) {
-						collision_normal += {-1, 0}
-					}
+					if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
+						collision_normal: rl.Vector2
 
-					if ball_pos.x > block_rect.x + block_rect.width && !block_exists(x + 1, y) {
-						collision_normal += {1, 0}
-					}
+						if ball_pos.y < block_rect.y && !block_exists(x, y - 1) {
+							collision_normal += {0, -1}
+						}
 
-					if collision_normal != 0 {
-						ball_dir = linalg.reflect(ball_dir, linalg.normalize(collision_normal))
-					}
+						if ball_pos.y > block_rect.y + block_rect.height && !block_exists(x, y + 1) {
+							collision_normal += {0, 1}
+						}
 
-					blocks[x][y] = false
-					row_color := row_colors[y]
-					score += block_color_score[row_color]
-					break num_blocks_x_loop
+						if ball_pos.x < block_rect.x && !block_exists(x - 1, y) {
+							collision_normal += {-1, 0}
+						}
+
+						if ball_pos.x > block_rect.x + block_rect.width && !block_exists(x + 1, y) {
+							collision_normal += {1, 0}
+						}
+
+						if collision_normal != 0 {
+							ball_dir = reflect_perturbe(ball_dir, linalg.normalize(collision_normal))
+						}
+
+						blocks[x][y] = false
+						row_color := row_colors[y]
+						score += block_color_score[row_color]
+						break num_blocks_x_loop
+					}
 				}
 			}
+
+			physics_time -= physics_dt
 		}
+
+		physics_blend_t := physics_time / f32(physics_dt)
+		ball_render_pos := math.lerp(previous_ball_pos, ball_pos, physics_blend_t)
+		paddle_render_pos_x := math.lerp(previous_paddle_pos_x, paddle_pos_x, physics_blend_t)
 
 		// DRAW
 
@@ -243,9 +264,9 @@ main :: proc() {
 		rl.ClearBackground(BACKGROUND_COLOR)
 
 		rl.BeginMode2D(camera)
-		rl.DrawTextureV(paddle_texture, {paddle_pos_x, PADDLE_POS_Y}, rl.WHITE)
+		rl.DrawTextureV(paddle_texture, {paddle_render_pos_x, PADDLE_POS_Y}, rl.WHITE)
 		//rl.DrawRectangleRec(paddle_rect, PLAYER_COLOR)
-		rl.DrawTextureV(ball_texture, ball_pos - {BALL_RADIUS, BALL_RADIUS}, rl.WHITE)
+		rl.DrawTextureV(ball_texture, ball_render_pos - {BALL_RADIUS, BALL_RADIUS}, rl.WHITE)
 		//rl.DrawCircleV(ball_pos, BALL_RADIUS, {200, 90, 20, 255})
 
 		for x in 0..<NUM_BLOCKS_X {
