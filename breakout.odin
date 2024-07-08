@@ -13,6 +13,7 @@ PADDLE_HEIGHT :: 6
 PADDLE_SPEED :: 200
 BALL_SPEED :: 240
 BALL_RADIUS :: 4
+BALL_START_Y :: 160
 BLOCK_WIDTH :: 28
 BLOCK_HEIGHT :: 10
 NUM_BLOCKS_X :: 10
@@ -66,10 +67,9 @@ block_exists :: proc(x, y: int) -> bool {
 	return blocks[x][y]
 }
 
-reflect_perturbe :: proc(dir: rl.Vector2, normal: rl.Vector2) -> rl.Vector2 {
-	r := linalg.reflect(dir, linalg.normalize(normal))
-	rot_angle := math.lerp(f32(-math.TAU/40), math.TAU/40, rand.float32())
-	return linalg.normalize(rl.Vector2Rotate(r, rot_angle))
+reflect :: proc(dir, normal: rl.Vector2) -> rl.Vector2 {
+	new_dir := linalg.reflect(dir, normal)
+	return linalg.normalize0(new_dir)
 }
 
 main :: proc() {
@@ -83,10 +83,7 @@ main :: proc() {
 	restart :: proc() {
 		paddle_pos_x = f32(SCREEN_SIZE)/2 - PADDLE_WIDTH/2
 		started = false
-		ball_pos = {
-			SCREEN_SIZE/2,
-			160,
-		}
+		ball_pos = {}
 		ball_dir = {}
 		score = 0
 
@@ -104,18 +101,13 @@ main :: proc() {
 	}
 
 	for !rl.WindowShouldClose() {
-		if rl.IsMouseButtonPressed(.LEFT) {
-			restart()
-			ball_pos.x = paddle_pos_x + PADDLE_WIDTH/2
-			ball_pos.y = PADDLE_POS_Y - BALL_RADIUS
-			ball_dir = linalg.normalize0(rl.GetScreenToWorld2D(rl.GetMousePosition(), camera) - ball_pos)
-			started = true
-		}
-
-		// UPDATE
-		if !started && rl.IsKeyPressed(.SPACE) {
-			ball_dir = rl.Vector2Rotate(rl.Vector2 {0, 1}, math.lerp(f32(-math.TAU/10), math.TAU/10, rand.float32()))
-			started = true
+		if !started {
+			ball_pos = { f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5)+SCREEN_SIZE/2, BALL_START_Y }
+			
+			if rl.IsKeyPressed(.SPACE) {
+				ball_dir = linalg.normalize0(rl.Vector2 {paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y} - ball_pos)
+				started = true
+			}
 		}
 
 		previous_paddle_pos_x := paddle_pos_x
@@ -134,17 +126,17 @@ main :: proc() {
 
 			if ball_pos.x + BALL_RADIUS > SCREEN_SIZE {
 				ball_pos.x = SCREEN_SIZE - BALL_RADIUS
-				ball_dir = reflect_perturbe(ball_dir, {-1, 0})
+				ball_dir = reflect(ball_dir, rl.Vector2{-1, 0})
 			} 
 
 			if ball_pos.x - BALL_RADIUS < 0 {
 				ball_pos.x = BALL_RADIUS
-				ball_dir = reflect_perturbe(ball_dir, {1, 0})
+				ball_dir = reflect(ball_dir, rl.Vector2{1, 0})
 			}
 
 			if ball_pos.y - BALL_RADIUS < 0 {
 				ball_pos.y = BALL_RADIUS
-				ball_dir = reflect_perturbe(ball_dir, {0, 1})
+				ball_dir = reflect(ball_dir, rl.Vector2{0, 1})
 			}
 
 			if ball_pos.y > SCREEN_SIZE + BALL_RADIUS*10 {
@@ -172,26 +164,26 @@ main :: proc() {
 			if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
 				collision_normal: rl.Vector2
 
-				if ball_pos.y < paddle_rect.y + paddle_rect.height {
+				if previous_ball_pos.y < paddle_rect.y + paddle_rect.height {
 					collision_normal += {0, -1}
 					ball_pos.y = paddle_rect.y - BALL_RADIUS
 				}
 
-				if ball_pos.y > paddle_rect.y {
+				if previous_ball_pos.y > paddle_rect.y {
 					collision_normal += {0, 1}
 					ball_pos.y = paddle_rect.y + paddle_rect.height + BALL_RADIUS
 				}
 
-				if ball_pos.x < paddle_rect.x {
+				if previous_ball_pos.x < paddle_rect.x {
 					collision_normal += {-1, 0}
 				}
 
-				if ball_pos.x > paddle_rect.x + paddle_rect.width {
+				if previous_ball_pos.x > paddle_rect.x + paddle_rect.width {
 					collision_normal += {1, 0}
 				}
 
 				if collision_normal != 0 {
-					ball_dir = reflect_perturbe(ball_dir, collision_normal)
+					ball_dir = reflect(ball_dir, collision_normal)
 				}
 			}
 
@@ -211,19 +203,19 @@ main :: proc() {
 					if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
 						collision_normal: rl.Vector2
 
-						if ball_pos.y < block_rect.y {
+						if previous_ball_pos.y < block_rect.y {
 							collision_normal += {0, -1}
 						}
 
-						if ball_pos.y > block_rect.y + block_rect.height {
+						if previous_ball_pos.y > block_rect.y + block_rect.height {
 							collision_normal += {0, 1}
 						}
 
-						if ball_pos.x < block_rect.x {
+						if previous_ball_pos.x < block_rect.x {
 							collision_normal += {-1, 0}
 						}
 
-						if ball_pos.x > block_rect.x + block_rect.width {
+						if previous_ball_pos.x > block_rect.x + block_rect.width {
 							collision_normal += {1, 0}
 						}
 
@@ -236,7 +228,7 @@ main :: proc() {
 						}
 
 						if collision_normal != 0 {
-							ball_dir = reflect_perturbe(ball_dir, collision_normal)
+							ball_dir = reflect(ball_dir, collision_normal)
 						}
 
 						blocks[x][y] = false
@@ -304,6 +296,12 @@ main :: proc() {
 
 		score_text := fmt.ctprint(score)
 		rl.DrawText(score_text, 5, 5, 10, rl.WHITE)
+
+		if !started {
+			start_text: cstring = "Press Space to Start"
+			start_text_width := rl.MeasureText(start_text, 15)
+			rl.DrawText(start_text, SCREEN_SIZE/2-start_text_width/2, BALL_START_Y - 30, 15, rl.WHITE)
+		}
 
 		rl.EndMode2D()
 		rl.EndDrawing()
