@@ -73,6 +73,21 @@ reflect :: proc(dir, normal: rl.Vector2) -> rl.Vector2 {
 	return linalg.normalize0(new_dir)
 }
 
+restart :: proc() {
+	paddle_pos_x = f32(SCREEN_SIZE)/2 - PADDLE_WIDTH/2
+	started = false
+	game_over = false
+	ball_pos = {}
+	ball_dir = {}
+	score = 0
+
+	for x in 0..<NUM_BLOCKS_X {
+		for y in 0..<NUM_BLOCKS_Y {
+			blocks[x][y] = true
+		}
+	}
+}
+
 main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
@@ -84,21 +99,6 @@ main :: proc() {
 	hit_block_sound := rl.LoadSound("hit_block.wav")
 	hit_paddle_sound := rl.LoadSound("hit_paddle.wav")
 	game_over_sound := rl.LoadSound("game_over.wav")
-
-	restart :: proc() {
-		paddle_pos_x = f32(SCREEN_SIZE)/2 - PADDLE_WIDTH/2
-		started = false
-		game_over = false
-		ball_pos = {}
-		ball_dir = {}
-		score = 0
-
-		for x in 0..<NUM_BLOCKS_X {
-			for y in 0..<NUM_BLOCKS_Y {
-				blocks[x][y] = true
-			}
-		}
-	}
 
 	restart()
 
