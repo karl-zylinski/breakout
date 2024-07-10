@@ -55,6 +55,7 @@ paddle_pos_x: f32
 ball_pos: rl.Vector2
 ball_dir: rl.Vector2
 started: bool
+game_over: bool
 blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
 score: int
 accumulated_time: f32
@@ -76,13 +77,18 @@ main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
 	rl.SetTargetFPS(500)
+	rl.InitAudioDevice()
 
 	ball_texture := rl.LoadTexture("ball.png")
 	paddle_texture := rl.LoadTexture("paddle.png")
+	hit_block_sound := rl.LoadSound("hit_block.wav")
+	hit_paddle_sound := rl.LoadSound("hit_paddle.wav")
+	game_over_sound := rl.LoadSound("game_over.wav")
 
 	restart :: proc() {
 		paddle_pos_x = f32(SCREEN_SIZE)/2 - PADDLE_WIDTH/2
 		started = false
+		game_over = false
 		ball_pos = {}
 		ball_dir = {}
 		score = 0
@@ -108,12 +114,16 @@ main :: proc() {
 				ball_dir = linalg.normalize0(rl.Vector2 {paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y} - ball_pos)
 				started = true
 			}
+		} else if game_over {
+			if rl.IsKeyPressed(.SPACE) {
+				restart()
+			}
+		} else {
+			accumulated_time += rl.GetFrameTime() 
 		}
 
 		previous_paddle_pos_x := paddle_pos_x
 		previous_ball_pos := ball_pos
-		accumulated_time += rl.GetFrameTime() 
-
 		DT :: 1.0/60.0 /// 0.016s
 
 		for accumulated_time > DT {
@@ -140,7 +150,8 @@ main :: proc() {
 			}
 
 			if ball_pos.y > SCREEN_SIZE + BALL_RADIUS*10 {
-				restart()
+				game_over = true
+				rl.PlaySound(game_over_sound)
 			}
 
 			paddle_move_velocity: f32
@@ -185,6 +196,8 @@ main :: proc() {
 				if collision_normal != 0 {
 					ball_dir = reflect(ball_dir, collision_normal)
 				}
+
+				rl.PlaySound(hit_paddle_sound)
 			}
 
 			block_x_loop: for x in 0..<NUM_BLOCKS_X {
@@ -234,6 +247,8 @@ main :: proc() {
 						blocks[x][y] = false
 						row_color := row_colors[y]
 						score += block_color_score[row_color]
+						rl.SetSoundPitch(hit_block_sound, rand.float32_range(0.8, 1.2))
+						rl.PlaySound(hit_block_sound)
 						break block_x_loop
 					}
 				}
@@ -298,9 +313,15 @@ main :: proc() {
 		rl.DrawText(score_text, 5, 5, 10, rl.WHITE)
 
 		if !started {
-			start_text: cstring = "Press Space to Start"
+			start_text: cstring = "Start: SPACE"
 			start_text_width := rl.MeasureText(start_text, 15)
 			rl.DrawText(start_text, SCREEN_SIZE/2-start_text_width/2, BALL_START_Y - 30, 15, rl.WHITE)
+		}
+
+		if game_over {
+			game_over_text: cstring = fmt.ctprintf("Score: %v. Reset: SPACE", score)
+			game_over_text_width := rl.MeasureText(game_over_text, 15)
+			rl.DrawText(game_over_text, SCREEN_SIZE/2-game_over_text_width/2, BALL_START_Y - 30, 15, rl.WHITE)
 		}
 
 		rl.EndMode2D()
@@ -309,5 +330,6 @@ main :: proc() {
 		free_all(context.temp_allocator)
 	}
 
+	rl.CloseAudioDevice()
 	rl.CloseWindow()
 }
