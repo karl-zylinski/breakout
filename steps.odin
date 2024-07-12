@@ -192,10 +192,15 @@ main :: proc() {
 		dt: f32
 
 		if !started {
-			ball_pos = { SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5), BALL_START_Y }
+			ball_pos = {
+				SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5),
+				BALL_START_Y
+			}
 			
 			if rl.IsKeyPressed(.SPACE) {
-				ball_dir = linalg.normalize0(rl.Vector2 {paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y} - ball_pos)
+				paddle_middle := rl.Vector2 { paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y }
+				ball_to_paddle := paddle_middle - ball_pos
+				ball_dir = linalg.normalize0(ball_to_paddle)
 				started = true
 			}
 		} else {
@@ -385,10 +390,15 @@ main :: proc() {
 		dt: f32
 
 		if !started {
-			ball_pos = { SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5), BALL_START_Y }
+			ball_pos = {
+				SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5),
+				BALL_START_Y
+			}
 			
 			if rl.IsKeyPressed(.SPACE) {
-				ball_dir = linalg.normalize0(rl.Vector2 {paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y} - ball_pos)
+				paddle_middle := rl.Vector2 { paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y }
+				ball_to_paddle := paddle_middle - ball_pos
+				ball_dir = linalg.normalize0(ball_to_paddle)
 				started = true
 			}
 		} else {
@@ -685,10 +695,15 @@ main :: proc() {
 		dt: f32
 
 		if !started {
-			ball_pos = { SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5), BALL_START_Y }
+			ball_pos = {
+				SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5),
+				BALL_START_Y,
+			}
 			
 			if rl.IsKeyPressed(.SPACE) {
-				ball_dir = linalg.normalize0(rl.Vector2 {paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y} - ball_pos)
+				paddle_middle := rl.Vector2 { paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y }
+				ball_to_paddle := paddle_middle - ball_pos
+				ball_dir = linalg.normalize0(ball_to_paddle)
 				started = true
 			}
 		} else if game_over {
@@ -1007,10 +1022,15 @@ main :: proc() {
 		DT :: 1.0/60.0 // 16 ms
 
 		if !started {
-			ball_pos = { SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5), BALL_START_Y }
+			ball_pos = {
+				SCREEN_SIZE/2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE/2.5),
+				BALL_START_Y
+			}
 			
 			if rl.IsKeyPressed(.SPACE) {
-				ball_dir = linalg.normalize0(rl.Vector2 {paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y} - ball_pos)
+				paddle_middle := rl.Vector2 { paddle_pos_x + PADDLE_WIDTH/2, PADDLE_POS_Y }
+				ball_to_paddle := paddle_middle - ball_pos
+				ball_dir = linalg.normalize0(ball_to_paddle)
 				started = true
 			}
 		} else if game_over {
