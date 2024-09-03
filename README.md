@@ -1,4 +1,4 @@
-Simple Breakout clone using Odin + Raylib. Tutorial videon how to create this: https://www.youtube.com/watch?v=vfgZOEvO0kM
+This is the code for a video tutorial on how to make a Breakout game using Odin and Raylib. Follow the video here: https://www.youtube.com/watch?v=vfgZOEvO0kM
 
 By Karl Zylinski, http://zylinski.se -- Support me at https://www.patreon.com/karl_zylinski
 
